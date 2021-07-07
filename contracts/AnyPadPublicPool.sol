@@ -3,6 +3,7 @@ pragma solidity ^0.6.2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./Configurable.sol";
 import "./Math.sol";
@@ -10,6 +11,7 @@ import "./Math.sol";
 contract AnyPadPublicPool is Configurable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
+    using Address for address payable;
 
     address public currencyToken;
     address public underlyingToken;
@@ -70,29 +72,15 @@ contract AnyPadPublicPool is Configurable {
         uint256 purchaseDeadline_,
         uint256 settleTime_
     ) external initializer {
-        __Governable_init_unchained(governor_);
-        __AnyPadPublicPool_init_unchained(
-            currencyToken_,
-            underlyingToken_,
-            price_,
-            maxAllocation_,
-            purchaseDeadline_,
-            settleTime_
-        );
-    }
-
-    function __AnyPadPublicPool_init_unchained(
-        address currencyToken_,
-        address underlyingToken_,
-        uint256 price_,
-        uint256 maxAllocation_,
-        uint256 purchaseDeadline_,
-        uint256 settleTime_
-    ) public governance {
         require(
             settleTime_ >= purchaseDeadline_,
-            "ANYPAD: settle time should be after purchase deadline"
+            "ANYPAD: Settle time should be after purchase deadline"
         );
+        require(
+            underlyingToken_ != address(0),
+            "ANYPAD: Invalid underlying token"
+        );
+        __Governable_init_unchained(governor_);
         currencyToken = currencyToken_;
         underlyingToken = underlyingToken_;
         price = price_;
@@ -114,13 +102,17 @@ contract AnyPadPublicPool is Configurable {
         maxAllocation = _maxAllocation;
     }
 
-    function setDate(uint256 _purchaseDeadline, uint256 _settleTime)
-        external
-        governance
-    {
-        purchaseDeadline = _purchaseDeadline;
-        settleTime = _settleTime;
-    }
+    // function setDate(uint256 _purchaseDeadline, uint256 _settleTime)
+    //     external
+    //     governance
+    // {
+    //     require(
+    //         _settleTime >= _purchaseDeadline,
+    //         "ANYPAD: settle time should be after purchase deadline"
+    //     );
+    //     purchaseDeadline = _purchaseDeadline;
+    //     settleTime = _settleTime;
+    // }
 
     function purchase(uint256 amount)
         external
@@ -254,20 +246,19 @@ contract AnyPadPublicPool is Configurable {
             refundAmount
         );
         totalSettledCurrency = totalSettledCurrency.add(refundAmount);
-        if (currencyToken == address(0)) {
-            msg.sender.transfer(refundAmount);
-        } else {
-            IERC20(currencyToken).safeTransfer(msg.sender, refundAmount);
-        }
         require(
             refundAmount > 0 || block.timestamp >= settleTime,
             "ANYPAD: It is not time to settle underlying"
         );
         if (block.timestamp >= settleTime) {
-            settledUnderlyingOf[msg.sender] = settledUnderlyingOf[msg.sender]
-            .add(volume);
+            settledUnderlyingOf[msg.sender] = settledUnderlyingOf[msg.sender].add(volume);
             totalSettledUnderlying = totalSettledUnderlying.add(volume);
             IERC20(underlyingToken).safeTransfer(msg.sender, volume);
+        }
+        if (currencyToken == address(0)) {
+            payable(msg.sender).sendValue(refundAmount);
+        } else {
+            IERC20(currencyToken).safeTransfer(msg.sender, refundAmount);
         }
         emit Settled(msg.sender, refundAmount, volume, rate);
     }
@@ -280,9 +271,9 @@ contract AnyPadPublicPool is Configurable {
         if (!completed) return (0, 0);
         amount_ = totalPurchasedCurrency.mul(settleRate).div(1e18);
         volume_ = IERC20(underlyingToken)
-        .balanceOf(address(this))
-        .add(totalSettledUnderlying)
-        .sub(totalPurchasedCurrency.mul(settleRate).div(price));
+                    .balanceOf(address(this))
+                    .add(totalSettledUnderlying)
+                    .sub(totalPurchasedCurrency.mul(settleRate).div(price));
     }
 
     function withdraw(
@@ -295,35 +286,11 @@ contract AnyPadPublicPool is Configurable {
         amount = Math.min(amount, amount_);
         volume = Math.min(volume, volume_);
         if (currencyToken == address(0)) {
-            to.transfer(amount);
+            to.sendValue(amount);
         } else {
             IERC20(currencyToken).safeTransfer(to, amount);
         }
         IERC20(underlyingToken).safeTransfer(to, volume);
         emit Withdrawn(to, amount, volume);
-    }
-
-    function withdrawToken(address _dst) external governance {
-        rescueTokens(address(underlyingToken), _dst);
-    }
-
-    function withdrawToken() external governance {
-        rescueTokens(address(underlyingToken), msg.sender);
-    }
-
-    function withdrawNative(address payable _dst) external governance {
-        _dst.transfer(address(this).balance);
-    }
-
-    function withdrawNative() external governance {
-        msg.sender.transfer(address(this).balance);
-    }
-
-    /// @notice This method can be used by the owner to extract mistakenly
-    ///  sent tokens to this contract.
-    /// @param _token The address of the token contract that you want to recover
-    function rescueTokens(address _token, address _dst) public governance {
-        uint256 balance = IERC20(_token).balanceOf(address(this));
-        IERC20(_token).safeTransfer(_dst, balance);
     }
 }

@@ -2,6 +2,7 @@
 pragma solidity ^0.6.2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./Configurable.sol";
@@ -11,6 +12,7 @@ import "./IERC20Metadata.sol";
 contract AnyPadPrivatePool is Configurable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
+    using Address for address payable;
 
     address public currencyToken;
     address public sellingToken;
@@ -39,6 +41,8 @@ contract AnyPadPrivatePool is Configurable {
 
     event Claimed(address indexed user, uint256 volume, uint256 total);
 
+    event Withdrawn(address to, uint256 amount, uint256 volume);
+
     modifier poolInProgress() {
         require(
             block.timestamp >= purchaseTime,
@@ -57,37 +61,23 @@ contract AnyPadPrivatePool is Configurable {
         uint256 purchaseTime_,
         uint256 withdrawTime_
     ) external initializer {
-        __Governable_init_unchained(governor_);
-        __AnyPadPrivatePool_init_unchained(
-            currencyToken_,
-            sellingToken_,
-            ratio_,
-            recipient_,
-            purchaseTime_,
-            withdrawTime_
+        require(
+            sellingToken_ != address(0),
+            "ANYPAD: sellingToken_ address cannot be 0"
         );
-    }
-
-    function __AnyPadPrivatePool_init_unchained(
-        address currencyToken_,
-        address sellingToken_,
-        uint256 ratio_,
-        address payable recipient_,
-        uint256 purchaseTime_,
-        uint256 withdrawTime_
-    ) public governance {
+        require(
+            recipient_ != address(0),
+            "ANYPAD: recipient_ address cannot be 0"
+        );
+        require(
+            purchaseTime_ < withdrawTime_,
+            "ANYPAD: purchaseTime_ should be before withdrawTime_"
+        );
+        __Governable_init_unchained(governor_);
         currencyToken = currencyToken_;
         sellingToken = sellingToken_;
         ratio = ratio_;
         recipient = recipient_;
-        purchaseTime = purchaseTime_;
-        withdrawTime = withdrawTime_;
-    }
-
-    function setDate(uint256 purchaseTime_, uint256 withdrawTime_)
-        external
-        governance
-    {
         purchaseTime = purchaseTime_;
         withdrawTime = withdrawTime_;
     }
@@ -101,6 +91,14 @@ contract AnyPadPrivatePool is Configurable {
         claim();
     }
 
+    function setRecipient(address payable recipient_) external governance {
+        require(
+            recipient_ != address(0),
+            "ANYPAD: recipient_ address cannot be 0"
+        );
+        recipient = recipient_;
+    }
+
     function setAllocations(address[] calldata users, uint256 amount) external {
         for (uint256 i = 0; i < users.length; i++) {
             setAllocation(users[i], amount);
@@ -111,6 +109,10 @@ contract AnyPadPrivatePool is Configurable {
         address[] calldata users,
         uint256[] calldata amounts
     ) external {
+        require(
+            users.length == amounts.length,
+            "ANYPAD: users length must be the same as amounts length"
+        );
         for (uint256 i = 0; i < users.length; i++) {
             setAllocation(users[i], amounts[i]);
         }
@@ -162,7 +164,7 @@ contract AnyPadPrivatePool is Configurable {
         require(amount > 0, "ANYPAD: No allocation");
         require(purchasedOf[msg.sender] == 0, "ANYPAD: Already purchased");
 
-        recipient.transfer(amount);
+        payable(recipient).sendValue(amount);
         uint256 volume = amount.mul(ratio).div(1e18);
         purchasedOf[msg.sender] = volume;
         totalPurchased = totalPurchased.add(volume);
@@ -171,7 +173,7 @@ contract AnyPadPrivatePool is Configurable {
             "ANYPAD: Not enough tokens left to purchase"
         );
         if (msg.value > amount) {
-            msg.sender.transfer(msg.value.sub(amount));
+            payable(msg.sender).sendValue(msg.value.sub(amount));
         }
         emit Purchased(msg.sender, amount, volume, totalPurchased);
     }
@@ -201,27 +203,33 @@ contract AnyPadPrivatePool is Configurable {
         emit Claimed(msg.sender, volume, totalClaimed);
     }
 
-    /// @notice This method can be used by the owner to extract mistakenly
-    ///  sent tokens to this contract.
-    /// @param _token The address of the token contract that you want to recover
-    function rescueTokens(address _token, address _dst) public governance {
-        uint256 balance = IERC20(_token).balanceOf(address(this));
-        IERC20(_token).safeTransfer(_dst, balance);
+    function withdrawable()
+        public
+        view
+        returns (uint256 amount_, uint256 volume_)
+    {
+        if (block.timestamp < withdrawTime) return (0, 0);
+        amount_ = address(this).balance;
+        volume_ = IERC20(sellingToken).balanceOf(address(this)).sub(
+            totalPurchased
+        );
     }
 
-    function withdrawToken(address _dst) external governance {
-        rescueTokens(address(sellingToken), _dst);
-    }
-
-    function withdrawToken() external governance {
-        rescueTokens(address(sellingToken), msg.sender);
-    }
-
-    function withdrawNative(address payable _dst) external governance {
-        _dst.transfer(address(this).balance);
-    }
-
-    function withdrawNative() external governance {
-        msg.sender.transfer(address(this).balance);
+    function withdraw(
+        address payable to,
+        uint256 amount,
+        uint256 volume
+    ) external governance {
+        require(block.timestamp >= withdrawTime, "ANYPAD: Pool is incomplete");
+        (uint256 amount_, uint256 volume_) = withdrawable();
+        amount = Math.min(amount, amount_);
+        volume = Math.min(volume, volume_);
+        if (currencyToken == address(0)) {
+            to.sendValue(amount);
+        } else {
+            IERC20(currencyToken).safeTransfer(to, amount);
+        }
+        IERC20(sellingToken).safeTransfer(to, volume);
+        emit Withdrawn(to, amount, volume);
     }
 }

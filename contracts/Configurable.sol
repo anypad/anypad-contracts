@@ -20,6 +20,7 @@ contract Governable is Initializable {
         virtual
         initializer
     {
+        require(governor_ != address(0), "governor_ address cannot be 0");
         governor = governor_;
         emit GovernorshipTransferred(address(0), governor);
     }
@@ -35,7 +36,7 @@ contract Governable is Initializable {
      * It will not be possible to call the functions with the `governance`
      * modifier anymore.
      */
-    function renounceGovernorship() public governance {
+    function renounceGovernorship() external governance {
         emit GovernorshipTransferred(governor, address(0));
         governor = address(0);
     }
@@ -44,7 +45,7 @@ contract Governable is Initializable {
      * @dev Allows the current governor to transfer control of the contract to a newGovernor.
      * @param newGovernor The address to transfer governorship to.
      */
-    function transferGovernorship(address newGovernor) public governance {
+    function transferGovernorship(address newGovernor) external governance {
         _transferGovernorship(newGovernor);
     }
 
@@ -118,7 +119,7 @@ contract Configurable is Governable {
         bytes32 key,
         address addr,
         uint256 value
-    ) public governance {
+    ) external governance {
         _setConfig(bytes32(uint256(key) ^ uint256(addr)), value);
     }
 }

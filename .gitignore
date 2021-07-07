@@ -8,3 +8,6 @@ flatten
 
 .env
 .vscode
+
+coverage
+coverage.json
