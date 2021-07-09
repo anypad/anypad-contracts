@@ -66,6 +66,10 @@ contract AnyPadPrivatePool is Configurable {
             "ANYPAD: sellingToken_ address cannot be 0"
         );
         require(
+            sellingToken_ != currencyToken_,
+            "ANYPAD: currency and selling token cannot be the same"
+        );
+        require(
             recipient_ != address(0),
             "ANYPAD: recipient_ address cannot be 0"
         );
@@ -209,7 +213,11 @@ contract AnyPadPrivatePool is Configurable {
         returns (uint256 amount_, uint256 volume_)
     {
         if (block.timestamp < withdrawTime) return (0, 0);
-        amount_ = address(this).balance;
+        if (currencyToken == address(0)) {
+            amount_ = address(this).balance;
+        } else {
+            amount_ = IERC20(currencyToken).balanceOf(address(this));
+        }
         volume_ = IERC20(sellingToken).balanceOf(address(this)).sub(
             totalPurchased
         );

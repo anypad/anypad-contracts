@@ -80,6 +80,10 @@ contract AnyPadPublicPool is Configurable {
             underlyingToken_ != address(0),
             "ANYPAD: Invalid underlying token"
         );
+        require(
+            underlyingToken_ != currencyToken_,
+            "ANYPAD: currency and underlying token cannot be the same"
+        );
         __Governable_init_unchained(governor_);
         currencyToken = currencyToken_;
         underlyingToken = underlyingToken_;
@@ -251,7 +255,8 @@ contract AnyPadPublicPool is Configurable {
             "ANYPAD: It is not time to settle underlying"
         );
         if (block.timestamp >= settleTime) {
-            settledUnderlyingOf[msg.sender] = settledUnderlyingOf[msg.sender].add(volume);
+            settledUnderlyingOf[msg.sender] = settledUnderlyingOf[msg.sender]
+            .add(volume);
             totalSettledUnderlying = totalSettledUnderlying.add(volume);
             IERC20(underlyingToken).safeTransfer(msg.sender, volume);
         }
@@ -271,9 +276,9 @@ contract AnyPadPublicPool is Configurable {
         if (!completed) return (0, 0);
         amount_ = totalPurchasedCurrency.mul(settleRate).div(1e18);
         volume_ = IERC20(underlyingToken)
-                    .balanceOf(address(this))
-                    .add(totalSettledUnderlying)
-                    .sub(totalPurchasedCurrency.mul(settleRate).div(price));
+        .balanceOf(address(this))
+        .add(totalSettledUnderlying)
+        .sub(totalPurchasedCurrency.mul(settleRate).div(price));
     }
 
     function withdraw(
