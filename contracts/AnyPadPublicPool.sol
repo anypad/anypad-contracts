@@ -3,7 +3,6 @@ pragma solidity ^0.6.2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./Configurable.sol";
 import "./Math.sol";
@@ -11,7 +10,6 @@ import "./Math.sol";
 contract AnyPadPublicPool is Configurable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
-    using Address for address payable;
 
     address public currencyToken;
     address public underlyingToken;
@@ -261,7 +259,7 @@ contract AnyPadPublicPool is Configurable {
             IERC20(underlyingToken).safeTransfer(msg.sender, volume);
         }
         if (currencyToken == address(0)) {
-            payable(msg.sender).sendValue(refundAmount);
+            msg.sender.transfer(refundAmount);
         } else {
             IERC20(currencyToken).safeTransfer(msg.sender, refundAmount);
         }
@@ -291,7 +289,7 @@ contract AnyPadPublicPool is Configurable {
         amount = Math.min(amount, amount_);
         volume = Math.min(volume, volume_);
         if (currencyToken == address(0)) {
-            to.sendValue(amount);
+            to.transfer(amount);
         } else {
             IERC20(currencyToken).safeTransfer(to, amount);
         }

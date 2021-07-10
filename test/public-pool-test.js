@@ -314,7 +314,7 @@ describe('AnyPadPublicPool', async function () {
     //fast forward to settle time
     await time.increase('2000');
 
-    await expect(attacker.attackPublic()).to.be.revertedWith('Address: unable to send value, recipient may have reverted');
+  await expect(attacker.attackPublic()).to.be.revertedWith('ANYPAD: Already settled');
   });
 
   it('withdrawable returns appropriate amount', async function () {

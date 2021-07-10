@@ -311,7 +311,7 @@ describe('AnyPadPrivatePool', async function () {
 
     await pool.connect(alice).purchaseNative({value: parseEther('1')});
     await pool.connect(bob).purchaseNative({value: parseEther('1')});
-    await expect(attacker.attackPrivate(parseEther('2'))).to.be.revertedWith('Address: unable to send value, recipient may have reverted');
+    await expect(attacker.attackPrivate(parseEther('2'))).to.be.revertedWith('Transaction reverted: contract call run out of gas and made the transaction revert');
 
     expect(await pool.totalPurchased()).to.equal(parseEther('2000'));
   });
@@ -421,6 +421,7 @@ describe('AnyPadPrivatePool', async function () {
     await expect(pool.connect(alice).claim()).to.be.revertedWith('ANYPAD: Claim phase has not started');
 
   });
+  
 
   it('cant claim tokens if aldready claimed', async function () {
     await createPool({

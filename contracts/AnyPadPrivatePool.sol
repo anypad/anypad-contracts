@@ -2,7 +2,6 @@
 pragma solidity ^0.6.2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "./Configurable.sol";
@@ -12,7 +11,6 @@ import "./IERC20Metadata.sol";
 contract AnyPadPrivatePool is Configurable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
-    using Address for address payable;
 
     address public currencyToken;
     address public sellingToken;
@@ -168,7 +166,7 @@ contract AnyPadPrivatePool is Configurable {
         require(amount > 0, "ANYPAD: No allocation");
         require(purchasedOf[msg.sender] == 0, "ANYPAD: Already purchased");
 
-        payable(recipient).sendValue(amount);
+        recipient.transfer(amount);
         uint256 volume = amount.mul(ratio).div(1e18);
         purchasedOf[msg.sender] = volume;
         totalPurchased = totalPurchased.add(volume);
@@ -177,7 +175,7 @@ contract AnyPadPrivatePool is Configurable {
             "ANYPAD: Not enough tokens left to purchase"
         );
         if (msg.value > amount) {
-            payable(msg.sender).sendValue(msg.value.sub(amount));
+            msg.sender.transfer(msg.value.sub(amount));
         }
         emit Purchased(msg.sender, amount, volume, totalPurchased);
     }
@@ -218,9 +216,10 @@ contract AnyPadPrivatePool is Configurable {
         } else {
             amount_ = IERC20(currencyToken).balanceOf(address(this));
         }
-        volume_ = IERC20(sellingToken).balanceOf(address(this)).sub(
-            totalPurchased
-        );
+        volume_ = IERC20(sellingToken)
+        .balanceOf(address(this))
+        .add(totalClaimed)
+        .sub(totalPurchased);
     }
 
     function withdraw(
@@ -233,7 +232,7 @@ contract AnyPadPrivatePool is Configurable {
         amount = Math.min(amount, amount_);
         volume = Math.min(volume, volume_);
         if (currencyToken == address(0)) {
-            to.sendValue(amount);
+            to.transfer(amount);
         } else {
             IERC20(currencyToken).safeTransfer(to, amount);
         }
