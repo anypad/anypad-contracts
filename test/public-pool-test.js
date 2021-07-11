@@ -314,7 +314,7 @@ describe('AnyPadPublicPool', async function () {
     //fast forward to settle time
     await time.increase('2000');
 
-  await expect(attacker.attackPublic()).to.be.revertedWith('ANYPAD: Already settled');
+  await expect(attacker.attackPublic()).to.be.revertedWith('ReentrancyGuard: reentrant call');
   });
 
   it('withdrawable returns appropriate amount', async function () {

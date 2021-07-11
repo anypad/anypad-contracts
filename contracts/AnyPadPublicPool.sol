@@ -4,10 +4,11 @@ pragma solidity ^0.6.2;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./Configurable.sol";
 import "./Math.sol";
 
-contract AnyPadPublicPool is Configurable {
+contract AnyPadPublicPool is Configurable, ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -118,6 +119,7 @@ contract AnyPadPublicPool is Configurable {
 
     function purchase(uint256 amount)
         external
+        nonReentrant
         poolInProgress
         maxAllocationNotReached(amount)
     {
@@ -149,6 +151,7 @@ contract AnyPadPublicPool is Configurable {
     function purchaseNative()
         public
         payable
+        nonReentrant
         poolInProgress
         maxAllocationNotReached(msg.value)
     {
@@ -224,7 +227,7 @@ contract AnyPadPublicPool is Configurable {
         );
     }
 
-    function settle() public {
+    function settle() public nonReentrant {
         require(
             block.timestamp >= purchaseDeadline,
             "ANYPAD: Can't settle before purchase deadline"
@@ -283,7 +286,7 @@ contract AnyPadPublicPool is Configurable {
         address payable to,
         uint256 amount,
         uint256 volume
-    ) external governance {
+    ) external governance nonReentrant {
         require(completed, "ANYPAD: Pool is incomplete");
         (uint256 amount_, uint256 volume_) = withdrawable();
         amount = Math.min(amount, amount_);

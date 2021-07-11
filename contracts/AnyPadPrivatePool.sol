@@ -4,11 +4,12 @@ pragma solidity ^0.6.2;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./Configurable.sol";
 import "./Math.sol";
 import "./IERC20Metadata.sol";
 
-contract AnyPadPrivatePool is Configurable {
+contract AnyPadPrivatePool is Configurable, ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
@@ -126,7 +127,7 @@ contract AnyPadPrivatePool is Configurable {
         emit AllocationAdded(user, amount, totalAllocation);
     }
 
-    function purchase(uint256 amount) external poolInProgress {
+    function purchase(uint256 amount) external nonReentrant poolInProgress {
         require(
             address(currencyToken) != address(0),
             "ANYPAD: Should call purchaseNative() instead"
@@ -157,7 +158,7 @@ contract AnyPadPrivatePool is Configurable {
         emit Purchased(msg.sender, amount, volume, totalPurchased);
     }
 
-    function purchaseNative() public payable poolInProgress {
+    function purchaseNative() public payable nonReentrant poolInProgress {
         require(
             address(currencyToken) == address(0),
             "ANYPAD: Should call purchase(uint amount) instead"
@@ -180,7 +181,7 @@ contract AnyPadPrivatePool is Configurable {
         emit Purchased(msg.sender, amount, volume, totalPurchased);
     }
 
-    function claim() public {
+    function claim() public nonReentrant {
         require(
             block.timestamp >= withdrawTime,
             "ANYPAD: Claim phase has not started"
@@ -226,7 +227,7 @@ contract AnyPadPrivatePool is Configurable {
         address payable to,
         uint256 amount,
         uint256 volume
-    ) external governance {
+    ) external governance nonReentrant {
         require(block.timestamp >= withdrawTime, "ANYPAD: Pool is incomplete");
         (uint256 amount_, uint256 volume_) = withdrawable();
         amount = Math.min(amount, amount_);
